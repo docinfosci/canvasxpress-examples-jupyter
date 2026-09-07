@@ -1,0 +1,11 @@
+- Use `uv` for Python package management and virtual environment management
+- Python version: 3.12 (defined in `.python-version`)
+- Install dependencies: `uv sync`
+- CanvasXpress is sourced from local path `../../public/canvasxpress-python`
+- Linting uses ruff with Jupyter notebook per-file ignores (F401, F841, E703)
+- Run linter: `uv run ruff check .`
+- Jupyter kernels: install with `uv run python -m ipykernel install --user --name canvasxpress-examples`
+- Jupytext: convert markdown to notebooks with `uv run jupytext --to notebook examples/analysis.md`
+- Examples are stored in the `examples/` directory (one .md and .ipynb per chart example)
+- Key dependencies: jupyterlab, notebook, ipykernel, ipywidgets, jupytext, canvasxpress
+- Skills are stored in the `skills/` directory and provide specialized workflows
