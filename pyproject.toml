@@ -1,0 +1,39 @@
+[project]
+name = "canvasxpress-examples-jupyter"
+version = "0.1.0"
+description = "CanvasXpress Jupyter notebook examples using experimental agent skills"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "canvasxpress==2026.9.2.dev235739",
+    "jupyterlab",
+    "notebook",
+    "ipykernel",
+    "ipywidgets",
+    "jupytext>=1.16.0",
+    "ruff>=0.16.6",
+    "pandas>=3.0.5",
+    "minify-html>=0.18.1",
+    "invoke>=3.0.3",
+    "python-dotenv>=1.2.3",
+]
+
+[tool.uv.sources]
+canvasxpress = { index = "test-pypi" }
+
+[[tool.uv.index]]
+name = "test-pypi"
+url = "https://test.pypi.org/simple"
+
+[tool.uv]
+index-strategy = "unsafe-best-match"
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "B", "C4", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"*.ipynb" = ["F401", "F821", "F841", "E703"]
