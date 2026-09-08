@@ -14,6 +14,7 @@ import json
 import os
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -36,6 +37,7 @@ QWEN_MODEL = "Qwen3.6-35B-A3B-OptiQ-4bit"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def py_to_json(s: str) -> str:
     """Convert Python True/False/None to JSON true/false/null."""
     return s.replace("True", "true").replace("False", "false").replace("None", "null")
@@ -44,13 +46,13 @@ def py_to_json(s: str) -> str:
 def _extract_json_from_response(response: str) -> dict | None:
     """Extract the outermost JSON object from a response that may contain reasoning text."""
     # Find the first '{' and last '}'
-    first_brace = response.find('{')
-    last_brace = response.rfind('}')
+    first_brace = response.find("{")
+    last_brace = response.rfind("}")
 
     if first_brace == -1 or last_brace == -1 or first_brace >= last_brace:
         return None
 
-    candidate = response[first_brace:last_brace + 1]
+    candidate = response[first_brace : last_brace + 1]
 
     # Verify it's valid JSON by checking brace matching
     depth = 0
@@ -60,7 +62,7 @@ def _extract_json_from_response(response: str) -> dict | None:
         if escaped:
             escaped = False
             continue
-        if char == '\\':
+        if char == "\\":
             escaped = True
             continue
         if char == '"' and not escaped:
@@ -68,9 +70,9 @@ def _extract_json_from_response(response: str) -> dict | None:
             continue
         if in_string:
             continue
-        if char == '{':
+        if char == "{":
             depth += 1
-        elif char == '}':
+        elif char == "}":
             depth -= 1
             if depth == 0:
                 break
@@ -84,14 +86,18 @@ def _extract_json_from_response(response: str) -> dict | None:
         return None
 
 
-def call_llm(messages: list[dict], max_tokens: int = 4096, model: str = DEEPSEEK_MODEL) -> str:
+def call_llm(
+    messages: list[dict], max_tokens: int = 4096, model: str = DEEPSEEK_MODEL
+) -> str:
     """Call the local LLM API."""
-    payload = json.dumps({
-        "model": model,
-        "messages": messages,
-        "max_tokens": max_tokens,
-        "temperature": 0.7,
-    }).encode("utf-8")
+    payload = json.dumps(
+        {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": 0.7,
+        }
+    ).encode("utf-8")
 
     req = urllib.request.Request(
         API_URL,
@@ -217,9 +223,10 @@ def _extract_data_and_config_from_html(html: str) -> tuple[dict, dict | None]:
 
     Returns (data_dict, config_dict) where data_dict is always a proper dict.
     """
+
     def _extract_js_object(text: str, var_name: str) -> str | None:
         """Extract a JS object variable value handling nested braces."""
-        pattern = re.compile(rf'{re.escape(var_name)}\s*=\s*([{{].*?);', re.DOTALL)
+        pattern = re.compile(rf"{re.escape(var_name)}\s*=\s*([{{].*?);", re.DOTALL)
         match = pattern.search(text)
         if not match:
             return None
@@ -227,23 +234,23 @@ def _extract_data_and_config_from_html(html: str) -> tuple[dict, dict | None]:
         # Find matching closing brace
         depth = 0
         for i, char in enumerate(value):
-            if char == '{':
+            if char == "{":
                 depth += 1
-            elif char == '}':
+            elif char == "}":
                 depth -= 1
                 if depth == 0:
-                    return value[:i+1]
+                    return value[: i + 1]
         return None
 
     # Extract <html> blocks
-    html_blocks = re.findall(r'<html>(.*?)</html>', html, re.DOTALL)
+    html_blocks = re.findall(r"<html>(.*?)</html>", html, re.DOTALL)
 
     best_data = {}
     best_config = None
 
     for block in html_blocks[:2]:
         # Find config variable
-        config_raw = _extract_js_object(block, 'var config')
+        config_raw = _extract_js_object(block, "var config")
         if not config_raw:
             continue
 
@@ -254,35 +261,37 @@ def _extract_data_and_config_from_html(html: str) -> tuple[dict, dict | None]:
             continue
 
         # Find ALL data variable matches (handle nested braces)
-        data_matches = list(re.finditer(r'var data\s*=', block, re.DOTALL))
+        data_matches = list(re.finditer(r"var data\s*=", block, re.DOTALL))
 
         for dm in data_matches:
             # Extract the value after "var data ="
-            after = block[dm.end():]
-            if after.lstrip().startswith('{'):
+            after = block[dm.end() :]
+            if after.lstrip().startswith("{"):
                 # Extract balanced object from after text
                 stripped = after.lstrip()
                 depth = 0
                 for j, char in enumerate(stripped):
-                    if char == '{':
+                    if char == "{":
                         depth += 1
-                    elif char == '}':
+                    elif char == "}":
                         depth -= 1
                         if depth == 0:
-                            data_raw = stripped[:j+1]
+                            data_raw = stripped[: j + 1]
                             data_json = py_to_json(data_raw)
                             try:
                                 data = json.loads(data_json)
                                 if "y" in data and "x" in data:
                                     return data, config
-                                if "y" in data and ("x" not in best_data or not best_data.get("y")):
+                                if "y" in data and (
+                                    "x" not in best_data or not best_data.get("y")
+                                ):
                                     best_data, best_config = data, config
                             except json.JSONDecodeError:
                                 pass
                             break
-            elif after.lstrip().startswith('['):
+            elif after.lstrip().startswith("["):
                 # Extract array value (simpler, no nested braces to worry about)
-                arr_match = re.match(r'\s*\[(.*?)\];', after, re.DOTALL)
+                arr_match = re.match(r"\s*\[(.*?)\];", after, re.DOTALL)
                 if arr_match:
                     data_raw = arr_match.group(1).strip()
                     data = _convert_2d_array_to_xyz(data_raw)
@@ -290,24 +299,31 @@ def _extract_data_and_config_from_html(html: str) -> tuple[dict, dict | None]:
                         best_data, best_config = data, config
 
         # Special handling for network charts (edges/nodes/groups data format)
-        if not best_data or ("y" not in best_data and "edges" in str(best_data).lower()):
+        if not best_data or (
+            "y" not in best_data and "edges" in str(best_data).lower()
+        ):
             # Look for var data = { ... } with edges
-            network_data_match = re.search(r'var data\s*=\s*({)', block)
+            network_data_match = re.search(r"var data\s*=\s*({)", block)
             if network_data_match:
-                start = network_data_match.start() + len('var data = ')
+                start = network_data_match.start() + len("var data = ")
                 # Find the opening brace
-                brace_start = block.find('{', start)
+                brace_start = block.find("{", start)
                 if brace_start != -1:
                     # Extract balanced braces
                     depth = 0
                     for i, char in enumerate(block[brace_start:]):
-                        if char == '{':
+                        if char == "{":
                             depth += 1
-                        elif char == '}':
+                        elif char == "}":
                             depth -= 1
                             if depth == 0:
-                                data_raw = block[brace_start:brace_start+i+1]
-                                data_raw = data_raw.replace("'", '"').replace('true', 'true').replace('false', 'false').replace('null', 'null')
+                                data_raw = block[brace_start : brace_start + i + 1]
+                                data_raw = (
+                                    data_raw.replace("'", '"')
+                                    .replace("true", "true")
+                                    .replace("false", "false")
+                                    .replace("null", "null")
+                                )
                                 try:
                                     data = json.loads(data_raw)
                                     if "edges" in data:
@@ -319,21 +335,26 @@ def _extract_data_and_config_from_html(html: str) -> tuple[dict, dict | None]:
 
         # Special handling for venn charts
         if not best_data or ("y" not in best_data and "venn" in str(best_data).lower()):
-            venn_data_match = re.search(r'var data\s*=\s*({)', block)
+            venn_data_match = re.search(r"var data\s*=\s*({)", block)
             if venn_data_match:
-                start = venn_data_match.start() + len('var data = ')
-                brace_start = block.find('{', start)
+                start = venn_data_match.start() + len("var data = ")
+                brace_start = block.find("{", start)
                 if brace_start != -1:
                     depth = 0
                     for i, char in enumerate(block[brace_start:]):
-                        if char == '{':
+                        if char == "{":
                             depth += 1
-                        elif char == '}':
+                        elif char == "}":
                             depth -= 1
                             if depth == 0:
-                                data_raw = block[brace_start:brace_start+i+1]
+                                data_raw = block[brace_start : brace_start + i + 1]
                                 if '"venn"' in data_raw or '"vennData"' in data_raw:
-                                    data_raw = data_raw.replace("'", '"').replace('true', 'true').replace('false', 'false').replace('null', 'null')
+                                    data_raw = (
+                                        data_raw.replace("'", '"')
+                                        .replace("true", "true")
+                                        .replace("false", "false")
+                                        .replace("null", "null")
+                                    )
                                     try:
                                         data = json.loads(data_raw)
                                         if "venn" in data or "vennData" in data:
@@ -403,7 +424,10 @@ def _convert_2d_array_to_xyz(df_str: str) -> dict:
     if first_data_row and len(first_data_row) > 2:
         # Check if column 3 looks like annotation data (string values)
         col3_val = first_data_row[2]
-        if isinstance(col3_val, str) and not col3_val.replace('.', '').replace('-', '').isdigit():
+        if (
+            isinstance(col3_val, str)
+            and not col3_val.replace(".", "").replace("-", "").isdigit()
+        ):
             has_annotations = True
             num_x_cols = len(first_data_row) - 2
 
@@ -429,7 +453,11 @@ def _convert_2d_array_to_xyz(df_str: str) -> dict:
             for j in range(num_x_cols):
                 col_idx = 2 + j
                 if col_idx < len(parts):
-                    var_name = header[col_idx] if col_idx < len(header) else f"Var{col_idx+1}"
+                    var_name = (
+                        header[col_idx]
+                        if col_idx < len(header)
+                        else f"Var{col_idx + 1}"
+                    )
                     if var_name not in x_data:
                         x_data[var_name] = []
                     x_data[var_name].append(_convert_value(parts[col_idx]))
@@ -443,7 +471,9 @@ def _convert_2d_array_to_xyz(df_str: str) -> dict:
     x_var_names = list(x_data.keys())
     vars = [v for v in all_var_names if v not in x_var_names]
     if not vars:
-        vars = [f"Var{i}" for i in range(1, len(parts) - len(x_data) + 1)] if parts else []
+        vars = (
+            [f"Var{i}" for i in range(1, len(parts) - len(x_data) + 1)] if parts else []
+        )
     y_dict = {"vars": vars, "smps": smps, "data": y_data}
 
     result = {"y": y_dict}
@@ -559,6 +589,7 @@ def _dict_to_python_code(obj, indent: int = 2, level: int = 0) -> str:
 # Existing prompt generation functions (keep these)
 # ---------------------------------------------------------------------------
 
+
 def extract_example(filepath: Path, example_number: int) -> tuple[dict, dict, str]:
     """Extract data dict, config dict, and raw code from an example block."""
     text = filepath.read_text()
@@ -571,17 +602,23 @@ def extract_example(filepath: Path, example_number: int) -> tuple[dict, dict, st
 
     code_start = text.find("```{code-cell} ipython3", header_idx)
     if code_start == -1:
-        raise ValueError(f"Could not find code cell for Example {example_number} in {filepath}")
+        raise ValueError(
+            f"Could not find code cell for Example {example_number} in {filepath}"
+        )
 
     code_start += len("```{code-cell} ipython3\n")
     end_pos = text.find("\n```", code_start)
     if end_pos == -1:
-        raise ValueError(f"Could not find end of code cell for Example {example_number}")
+        raise ValueError(
+            f"Could not find end of code cell for Example {example_number}"
+        )
 
     code = text[code_start:end_pos].strip()
 
     data_raw = re.search(r"data = (.*?)\n\nconfig", code, re.DOTALL).group(1)
-    config_raw = re.search(r"config = (.*?)\s*\n\s*cx = CanvasXpress", code, re.DOTALL).group(1)
+    config_raw = re.search(
+        r"config = (.*?)\s*\n\s*cx = CanvasXpress", code, re.DOTALL
+    ).group(1)
 
     data = json.loads(py_to_json(data_raw))
     config = json.loads(py_to_json(config_raw))
@@ -635,8 +672,8 @@ chart shows in plain English, as if you were a scientist explaining results
 to a colleague.
 
 ## DATA SUMMARY
-- Variables (conditions): {', '.join(data_info['vars'])}
-- Total samples: {data_info['num_samples']} (first 5: {', '.join(data_info['first_5_smps'])})
+- Variables (conditions): {", ".join(data_info["vars"])}
+- Total samples: {data_info["num_samples"]} (first 5: {", ".join(data_info["first_5_smps"])})
 {color_info}
 
 ## CHART CONFIGURATION
@@ -712,16 +749,22 @@ def _color_key_summary(config: dict) -> str:
     return "\n" + "\n".join(lines) if lines else ""
 
 
-def evaluate_description(description: str, config: dict, data_info: dict) -> tuple[dict, float]:
+def evaluate_description(
+    description: str, config: dict, data_info: dict
+) -> tuple[dict, float]:
     """Check whether description covers key chart features. Returns (checks dict, score)."""
     dl = description.lower()
 
     checks = {
         "mentions_bar_chart": "bar" in dl,
         "mentions_layout": any(x in dl for x in ["panel", "facet", "grid", "layout"]),
-        "mentions_grouping": any(x in dl for x in ["group", "segregat", "stratify", "categorize"]),
+        "mentions_grouping": any(
+            x in dl for x in ["group", "segregat", "stratify", "categorize"]
+        ),
         "mentions_variables": any(v.lower() in dl for v in data_info["vars"]),
-        "mentions_error_bars": any(x in dl for x in ["error bar", "uncertainty", "variance"]),
+        "mentions_error_bars": any(
+            x in dl for x in ["error bar", "uncertainty", "variance"]
+        ),
         "mentions_xaxis": "x-axis" in dl or "x axis" in dl or "horizontal" in dl,
         "mentions_yaxis": "y-axis" in dl or "y axis" in dl or "vertical" in dl,
         "no_code": "```" not in description and "CanvasXpress" not in description,
@@ -780,8 +823,16 @@ def refine_description(
     best_iter = 1
 
     for i in range(1, iterations + 1):
-        feedback = build_feedback(dict(evaluate_description(best_desc, config, data_info)[0])) if i > 1 else ""
-        prompt = build_refined_prompt(data, config, data_info, best_desc, feedback) if i > 1 else build_initial_prompt(data, config, data_info)
+        feedback = (
+            build_feedback(dict(evaluate_description(best_desc, config, data_info)[0]))
+            if i > 1
+            else ""
+        )
+        prompt = (
+            build_refined_prompt(data, config, data_info, best_desc, feedback)
+            if i > 1
+            else build_initial_prompt(data, config, data_info)
+        )
 
         resp = call_llm([_build_system_prompt(), {"role": "user", "content": prompt}])
         # Strip any markdown code blocks
@@ -820,7 +871,11 @@ def agent_prompt_from_description(description: str, data: dict, config: dict) ->
     legend_cols = config.get("legendColumns", "")
     xtitle = config.get("xAxisTitle", "")
 
-    colors_str = ", ".join(f"{v}={k}" for k, v in color_key.items()) if color_key else "default colors"
+    colors_str = (
+        ", ".join(f"{v}={k}" for k, v in color_key.items())
+        if color_key
+        else "default colors"
+    )
 
     parts = [
         f"Create a vertical grouped bar chart using CanvasXpress that displays data "
@@ -830,7 +885,9 @@ def agent_prompt_from_description(description: str, data: dict, config: dict) ->
     if layout:
         parts.append(f"The chart should use a {layout} panel grid layout")
         if segregate:
-            parts[-1] += f" where each panel is segregated by {segregate[0]} from sample annotations"
+            parts[-1] += (
+                f" where each panel is segregated by {segregate[0]} from sample annotations"
+            )
         parts[-1] += "."
 
     parts.append(f"The dataset contains {n_smps} samples.")
@@ -842,8 +899,10 @@ def agent_prompt_from_description(description: str, data: dict, config: dict) ->
 
     if n_errors > 0:
         samples = list({e.get("sample", "") for e in config["decorations"]["error"]})
-        parts.append(f"Include error bars with min/max ranges for specific samples "
-                     f"({', '.join(samples)}) across multiple genes.")
+        parts.append(
+            f"Include error bars with min/max ranges for specific samples "
+            f"({', '.join(samples)}) across multiple genes."
+        )
 
     if theme:
         parts.append(f"Apply the {theme} theme for styling.")
@@ -858,6 +917,7 @@ def agent_prompt_from_description(description: str, data: dict, config: dict) ->
 # ---------------------------------------------------------------------------
 # Chart generation task
 # ---------------------------------------------------------------------------
+
 
 def _build_md_content(chart_type: str, examples: list[dict]) -> str:
     """Build MyST markdown content for a chart type notebook."""
@@ -893,6 +953,14 @@ jupytext:
 
     # Title
     parts.append(f"# {chart_type.title()} Chart Examples\n\n")
+
+    # MyBinder launch link
+    notebook_name = f"{chart_type}.ipynb"
+    encoded_notebook = urllib.parse.quote(f"examples/{notebook_name}")
+    binder_url = f"{BINDER_BASE}?urlpath=lab/tree/{encoded_notebook}"
+    parts.append(
+        f"**[Launch in MyBinder]({binder_url})** for live interactive exploration\n\n"
+    )
 
     # Single import cell for all examples
     parts.append("```{code-cell} ipython3\n")
@@ -934,10 +1002,12 @@ jupytext:
     return "".join(parts)
 
 
-@task(help={
-    "chart_type": "Chart type (e.g. lollipop, bar, scatter2d)",
-    "num_examples": "Number of examples to generate (default: 3)",
-})
+@task(
+    help={
+        "chart_type": "Chart type (e.g. lollipop, bar, scatter2d)",
+        "num_examples": "Number of examples to generate (default: 3)",
+    }
+)
 def chart_generate(ctx: context.Context, chart_type: str, num_examples: int = 3):
     """Generate one or more chart examples from CanvasXpress website.
 
@@ -973,7 +1043,9 @@ def chart_generate(ctx: context.Context, chart_type: str, num_examples: int = 3)
             html = _fetch_html(url)
             data, config = _extract_data_and_config_from_html(html)
             if not data or not config:
-                print(f"  Warning: Could not extract data/config for lollipop example {i}")
+                print(
+                    f"  Warning: Could not extract data/config for lollipop example {i}"
+                )
                 continue
         else:
             # For other chart types, use DeepSeek to extract from HTML
@@ -985,8 +1057,11 @@ def chart_generate(ctx: context.Context, chart_type: str, num_examples: int = 3)
             continue
 
         # Step 2: Clean config (keep ALL options - CanvasXpress Python supports all JS options)
-        clean_config = {k: v for k, v in config.items()
-                        if not k.startswith("on") or k in ["on", "events"]}
+        clean_config = {
+            k: v
+            for k, v in config.items()
+            if not k.startswith("on") or k in ["on", "events"]
+        }
 
         # Convert data dict to Python source code (not JSON)
         data_str = _dict_to_python_code(data, indent=2)
@@ -1028,10 +1103,16 @@ Data: {json.dumps(data, indent=2, default=str)[:1500]}
 Config: {json.dumps(clean_config, indent=2, default=str)[:800]}"""
 
         try:
-            response = call_llm([
-                {"role": "system", "content": "You are a data visualization expert. Respond with valid JSON."},
-                {"role": "user", "content": prompt},
-            ], max_tokens=1024)
+            response = call_llm(
+                [
+                    {
+                        "role": "system",
+                        "content": "You are a data visualization expert. Respond with valid JSON.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=1024,
+            )
 
             ai_response = _extract_json_from_response(response)
             if ai_response:
@@ -1041,7 +1122,9 @@ Config: {json.dumps(clean_config, indent=2, default=str)[:800]}"""
         except Exception as e:
             print(f"  Warning: Could not generate AI prompt: {e}")
             example["description"] = ""
-            example["agent_prompt"] = f"Create a {chart_type} chart using CanvasXpress with the provided data and configuration."
+            example["agent_prompt"] = (
+                f"Create a {chart_type} chart using CanvasXpress with the provided data and configuration."
+            )
 
         examples.append(example)
         print(f"  Example {i}: {example['title']}")
@@ -1059,9 +1142,10 @@ Config: {json.dumps(clean_config, indent=2, default=str)[:800]}"""
         existing_md = md_file.read_text()
         # Extract existing example titles to avoid duplicates
         import re
-        existing_titles = set(re.findall(r'## Example \d+: (.+)', existing_md))
+
+        existing_titles = set(re.findall(r"## Example \d+: (.+)", existing_md))
         # Filter out examples that already exist
-        new_examples = [ex for ex in examples if ex['title'] not in existing_titles]
+        new_examples = [ex for ex in examples if ex["title"] not in existing_titles]
         if new_examples:
             # Append new examples to existing content
             new_md_content = _build_md_content(chart_type, new_examples)
@@ -1094,3 +1178,13 @@ Config: {json.dumps(clean_config, indent=2, default=str)[:800]}"""
     print(f"\nGenerated {len(examples)} examples:")
     for ex in examples:
         print(f"  - {ex['title']}")
+
+
+# ---------------------------------------------------------------------------
+# Binder configuration
+# ---------------------------------------------------------------------------
+
+REPO_OWNER = "docinfosci"
+REPO_NAME = "canvasxpress-examples-jupyter"
+BRANCH = "main"
+BINDER_BASE = f"https://mybinder.org/{REPO_OWNER}/{REPO_NAME}/{BRANCH}"
