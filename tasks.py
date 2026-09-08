@@ -959,7 +959,7 @@ jupytext:
     encoded_notebook = urllib.parse.quote(f"examples/{notebook_name}")
     binder_url = f"{BINDER_BASE}?urlpath=lab/tree/{encoded_notebook}"
     parts.append(
-        f"**[Launch in MyBinder]({binder_url})** for live interactive exploration\n\n"
+        f'<a href="{binder_url}" target="_blank">Launch in MyBinder</a> for live interactive exploration\n\n'
     )
 
     # Single import cell for all examples
