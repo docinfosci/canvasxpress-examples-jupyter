@@ -5,7 +5,7 @@ description = "CanvasXpress Jupyter notebook examples using experimental agent s
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "canvasxpress==2026.9.2.dev235739",
+    "canvasxpress[jupyter]==2026.9.8.224424",
     "jupyterlab",
     "notebook",
     "ipykernel",
@@ -17,16 +17,6 @@ dependencies = [
     "invoke>=3.0.3",
     "python-dotenv>=1.2.3",
 ]
-
-[tool.uv.sources]
-canvasxpress = { index = "test-pypi" }
-
-[[tool.uv.index]]
-name = "test-pypi"
-url = "https://test.pypi.org/simple"
-
-[tool.uv]
-index-strategy = "unsafe-best-match"
 
 [tool.ruff]
 line-length = 88
