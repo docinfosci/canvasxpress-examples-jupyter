@@ -1,0 +1,6 @@
+examples/**/*.md
+skills/
+scripts/
+.git
+build/
+.ipynb_checkpoints
